@@ -8,12 +8,17 @@ function App() {
   const [randomNumber, setRandomNumber] = useState('');
   const [message, setMessage] = useState('');
   const [budget, setBudget] = useState(parseInt(Cookies.get('budget')));
-  const [bet, setBet] = useState('');
+  const [bet, setBet] = useState(1000);
+  const [listBet, setListBet] = useState([])
   const [option, setOption] = useState([]);
+  let checkBet = 0;
   let objTemp = {};
+  let finalResult = 0;
 
   const generateRandomNumbers = () => {
+    checkBet=0;
     objTemp = {};
+    finalResult = 0;
     return new Promise((resolve) => {
       const interval = setInterval(() => {
         const randomNum1 = Math.floor(Math.random() * 6) + 1;
@@ -23,24 +28,19 @@ function App() {
         setDisplay(`${randomNum1} ${randomNum2} ${randomNum3}`);
       }, 10);
 
-      let count = 0;
-
       setTimeout(() => {
         clearInterval(interval);
         const newRandomNumber1 = Math.floor(Math.random() * 6) + 1;
         const newRandomNumber2 = Math.floor(Math.random() * 6) + 1;
         const newRandomNumber3 = Math.floor(Math.random() * 6) + 1;
 
-        if (Object.values(option).includes(newRandomNumber1) === true) count += 1;
-        if (Object.values(option).includes(newRandomNumber2) === true) count += 1;
-        if (Object.values(option).includes(newRandomNumber3) === true) count += 1;
+        const sum = calculatorResult([newRandomNumber1, newRandomNumber2, newRandomNumber3]);
 
         // delete to calculator
         objTemp = option.filter((opt) => opt !== newRandomNumber1).filter((opt) => opt !== newRandomNumber2).filter((opt) => opt !== newRandomNumber3);
 
-
         setDisplay(`${convertValue(newRandomNumber1)} ${convertValue(newRandomNumber2)} ${convertValue(newRandomNumber3)}`);
-        resolve(count);
+        resolve(sum);
       }, 3000);
     });
   };
@@ -69,16 +69,13 @@ function App() {
     }
 
     setMessage('');
-    setBet('');
 
     try {
       const result = await generateRandomNumbers();
-      setMessage("ăn được " + result + " thua " + objTemp.length);
-      console.log("result: ",result);
-      console.log("objTemp: ",objTemp);
-      // Calculate the updated budget and update it using the state updater function
-      setBudget((prevBudget) => prevBudget + result * 1000 - objTemp.length * 1000);
-      Cookies.set('budget', budget + result * 1000 - objTemp.length * 1000, { expires: 7 });
+      console.log("chỗ tính tiền : ",result);
+      const newBudget = budget + result;
+      setBudget(newBudget);
+      Cookies.set('budget', newBudget, { expires: 7 });
     } catch (error) {
       console.error(error);
     }
@@ -86,40 +83,69 @@ function App() {
 
   // Setup bầu cua
   const handleOption = (value) => () => {
-    setOption((prevOption) => {
-      if (!prevOption.includes(value)) {
-        return [...prevOption, value]; // Add value if it's not already present
+    const updatedBet = bet + listBet.reduce((acc, curr) => acc + curr, 0);
+    console.log("check bet: ",updatedBet);
+    if (updatedBet <= budget){
+      if (!option.includes(value)) {
+        setOption((prevOption) => [...prevOption, value]);
+        setListBet((prevListBet) => [...prevListBet, bet]);
       } else {
-        return prevOption.filter((opt) => opt !== value); // Remove value if it exists
+        setOption((prevOption) => prevOption.filter((opt) => opt !== value));
+        setListBet((prevListBet) => prevListBet.filter((prevBet, index) => option[index] !== value));
       }
-    });
-    checkContain(value);
+      setMessage('');
+
+    } else {
+      setMessage('Không đủ tiền thì khỏi chơi');
+    }
+    console.log("Tổng bet: ", sumBet(listBet));
   };
 
-  const checkContain = (value) => {
-    console.log("option: ", option.length);
-    console.log("option: ", option);
-    console.log("option: ", Object.values(option).includes(value));
+  function sumBet(listBet){
+    let totalSum = 0;
+    Object.keys(listBet).forEach((key) => {
+      totalSum += listBet[key];
+    });
+    return totalSum;
   }
 
+  const handleBet = (value) => () => {
+    setBet(value);
+  };
+
   // Delete choosen
-  function removeKeyByValue(obj, value) {
-    const updatedObj = { ...obj };
-    Object.keys(updatedObj).forEach((key) => {
-      if (updatedObj[key] === value) {
-        delete updatedObj[key];
+  function calculatorResult(obj) {
+    const resultList = { ...obj };
+    let sum = 0;
+
+    Object.keys(option).forEach((key) => {
+      console.log("Vòng đầu: ", option[key]);
+      let check = false;
+      Object.keys(resultList).forEach((key1) => {
+        console.log(resultList[key1]);
+        if (resultList[key1] === option[key]) {
+          check = true;
+          console.log("Có trùng này, cộng ", listBet[key]);
+          sum += listBet[key];
+          delete resultList[key1];
+          return; // Sử dụng return để thoát khỏi vòng lặp inner khi đã tìm thấy giá trị
+        }
+      });
+      if (check === false) {
+        console.log("Không trùng cái nào cả, trừ ", listBet[key]);
+        sum -= listBet[key];
       }
     });
-    setOption(updatedObj);
+
+    console.log("Kết quả cuối được ", sum);
+    return sum;
   }
 
   return (
     <div className="container">
       <div className="container">
-        <h1>Bầu cua</h1>
         <div className='head'>
           <h1>Còn lại: {budget}</h1>
-          <h1>Mặc định: 1000 </h1>
         </div>
         <br></br>
         <div className="result-control">
@@ -127,7 +153,9 @@ function App() {
           {randomNumber && <h1>Kết quả: {randomNumber}</h1>}
         </div>
         <h3>{message}</h3><br></br>
-        {/* <h3>Option: [{option}]</h3><br></br> */}
+        {/* <h3>Option: [{option}]</h3> */}
+        <h3>Tổng Bet: [{sumBet(listBet)}]</h3><br></br>
+
         <div className="input-area">
           <button
             className={`btn btn-taixiu ${Object.values(option).includes(1) === true ? 'active' : ''}`}
@@ -167,6 +195,45 @@ function App() {
           </button>
         </div><br></br>
         <button className="btn btn-taixiu" onClick={compareResult}>Lắc</button>
+        <div style={{marginTop:"10px"}} className="input-area">
+          <button
+            className={`btn btn-taixiu ${bet === 1000 ? 'active' : ''}`}
+            onClick={handleBet(1000)}
+          >
+            1K
+          </button>
+          <button
+            className={`btn btn-taixiu ${bet === 2000 ? 'active' : ''}`}
+            onClick={handleBet(2000)}
+          >
+            2K
+          </button>
+          <button
+            className={`btn btn-taixiu ${bet === 5000 ? 'active' : ''}`}
+            onClick={handleBet(5000)}
+          >
+            5K
+          </button>
+          <button
+            className={`btn btn-taixiu ${bet === 10000 ? 'active' : ''}`}
+            onClick={handleBet(10000)}
+          >
+            10K
+          </button>
+          <button
+            className={`btn btn-taixiu ${bet === 20000 ? 'active' : ''}`}
+            onClick={handleBet(20000)}
+          >
+            20K
+          </button>
+          <button
+            className={`btn btn-taixiu ${bet === 50000 ? 'active' : ''}`}
+            onClick={handleBet(50000)}
+          >
+            50K
+          </button>
+
+        </div>
       </div>
     </div>
   );
